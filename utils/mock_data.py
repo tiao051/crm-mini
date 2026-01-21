@@ -1,6 +1,4 @@
 """
-Mock Data Generator
-===================
 Generates realistic mock customer data for the CRM system.
 Uses the Faker library for realistic names, emails, addresses, etc.
 """
@@ -35,10 +33,13 @@ def generate_customer_id(index: int) -> str:
 
 def generate_phone() -> str:
     """
-    Generate a realistic phone number.
-    Format: XXX-XXX-XXXX (US format)
+    Generate a valid phone number matching validation rules.
+    Format: XXX-XXX-XXXX (10 digits with dashes)
     """
-    return fake.phone_number()
+    # Generate 10 random digits
+    digits = ''.join([str(random.randint(0, 9)) for _ in range(10)])
+    # Format as XXX-XXX-XXXX
+    return f"{digits[:3]}-{digits[3:6]}-{digits[6:10]}"
 
 
 def generate_address() -> str:
@@ -229,7 +230,7 @@ def initialize_mock_data(include_birthday_customer: bool = False) -> bool:
     success = data_service.save_data(customers)
     
     if success:
-        print("\n✅ Mock data initialization complete!")
+        print("\n Mock data initialization complete!")
         print(f"   Total customers: {len(customers)}")
         
         # Count by type
