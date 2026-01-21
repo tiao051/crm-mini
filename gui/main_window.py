@@ -4,6 +4,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from typing import Optional, List
 import os
+import re
+from difflib import SequenceMatcher
 
 from models.customer import Customer
 from services.crm_service import CRMService
@@ -30,9 +32,17 @@ class MainWindow:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("Mini CRM - Customer Relationship Management")
-        self.root.geometry("1280x850")
-        self.root.minsize(1000, 700)
+        # Get screen dimensions for responsive sizing
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        # Default to 80% of screen or min size
+        default_width = max(int(screen_width * 0.8), 1024)
+        default_height = max(int(screen_height * 0.8), 700)
+        self.root.geometry(f"{default_width}x{default_height}")
+        self.root.minsize(800, 600)  # Lower minimum for small laptops
         self.root.configure(bg=self.COLORS['bg'])
+        # Bind resize event to handle layout adjustments
+        self.root.bind('<Configure>', self._on_window_resize)
         
         self.data_service = DataService()
         self.crm_service = CRMService(self.data_service)
@@ -40,25 +50,69 @@ class MainWindow:
         
         self.current_filter = "All"
         self.current_search = ""
+        self.last_width = default_width
+        self.last_height = default_height
+        self.is_responsive_mode = default_width < 1200  # Flag for single column layout
         
         self._apply_theme()
         self._create_menu()
         self._create_widgets()
         self._refresh_table()
         self._update_chart()
-        self._check_birthdays()
         
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+    
+    def _get_responsive_font_size(self, base_size: int) -> int:
+        """Calculate responsive font size based on window width."""
+        current_width = self.root.winfo_width()
+        if current_width < 1000:
+            return max(int(base_size * 0.85), 8)
+        elif current_width < 1200:
+            return int(base_size * 0.9)
+        return base_size
+    
+    def _normalize_text(self, text: str) -> str:
+        """Normalize text for fuzzy search: lowercase, remove accents and special chars."""
+        if not text:
+            return ""
+        # Lowercase
+        text = text.lower()
+        # Remove special characters and extra spaces
+        text = re.sub(r'[^a-z0-9\s]', '', text)
+        return text.strip()
+    
+    def _fuzzy_match(self, search_text: str, target_text: str, threshold: float = 0.6) -> bool:
+        """
+        Fuzzy match search text against target text.
+        Returns True if similarity >= threshold or if search is substring of target.
+        """
+        search_norm = self._normalize_text(search_text)
+        target_norm = self._normalize_text(target_text)
+        
+        if not search_norm:
+            return True
+        
+        # Exact substring match (most important)
+        if search_norm in target_norm:
+            return True
+        
+        # Fuzzy match using sequence matching
+        ratio = SequenceMatcher(None, search_norm, target_norm).ratio()
+        return ratio >= threshold
     
     def _apply_theme(self) -> None:
         style = ttk.Style()
         if 'clam' in style.theme_names():
             style.theme_use('clam')
         
+        title_font_size = self._get_responsive_font_size(20)
+        subtitle_font_size = self._get_responsive_font_size(12)
+        label_font_size = self._get_responsive_font_size(10)
+        
         style.configure("TFrame", background=self.COLORS['bg'])
-        style.configure("TLabel", background=self.COLORS['bg'], foreground=self.COLORS['text'], font=('Segoe UI', 10))
-        style.configure("Title.TLabel", font=('Segoe UI', 20, 'bold'), foreground=self.COLORS['text'])
-        style.configure("Subtitle.TLabel", font=('Segoe UI', 12), foreground=self.COLORS['text_muted'])
+        style.configure("TLabel", background=self.COLORS['bg'], foreground=self.COLORS['text'], font=('Segoe UI', label_font_size))
+        style.configure("Title.TLabel", font=('Segoe UI', title_font_size, 'bold'), foreground=self.COLORS['text'])
+        style.configure("Subtitle.TLabel", font=('Segoe UI', subtitle_font_size), foreground=self.COLORS['text_muted'])
         
         style.configure("Modern.TButton", font=('Segoe UI', 10, 'bold'), padding=(16, 10))
         
@@ -103,22 +157,29 @@ class MainWindow:
         help_menu.add_command(label="About", command=self._show_about)
     
     def _create_widgets(self) -> None:
+        # Responsive padding based on window size
+        current_width = self.root.winfo_width()
+        padx = 15 if current_width < 1000 else 20
+        pady = 10 if current_width < 1000 else 15
+        
         main_frame = ttk.Frame(self.root)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=padx, pady=pady)
         
         header_frame = ttk.Frame(main_frame)
         header_frame.pack(fill=tk.X, pady=(0, 20))
         
+        # Responsive header layout
         title_frame = ttk.Frame(header_frame)
-        title_frame.pack(side=tk.LEFT)
+        title_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
         ttk.Label(title_frame, text="Mini CRM Dashboard", style="Title.TLabel").pack(anchor=tk.W)
         ttk.Label(title_frame, text="Manage your customer relationships effectively",
                  style="Subtitle.TLabel").pack(anchor=tk.W)
         
         stats_frame = ttk.Frame(header_frame)
-        stats_frame.pack(side=tk.RIGHT)
+        stats_frame.pack(side=tk.RIGHT, padx=(10, 0))
+        count_font_size = self._get_responsive_font_size(14)
         self.count_label = ttk.Label(stats_frame, text="25 customers",
-                                     font=('Segoe UI', 14, 'bold'), foreground=self.COLORS['primary'])
+                                     font=('Segoe UI', count_font_size, 'bold'), foreground=self.COLORS['primary'])
         self.count_label.pack(side=tk.RIGHT)
         
         search_card = tk.Frame(main_frame, bg=self.COLORS['card'],
@@ -126,27 +187,52 @@ class MainWindow:
         search_card.pack(fill=tk.X, pady=(0, 15))
         
         search_inner = ttk.Frame(search_card)
-        search_inner.pack(fill=tk.X, padx=20, pady=15)
+        search_inner.pack(fill=tk.X, padx=15, pady=12)
         
-        ttk.Label(search_inner, text="Search:", font=('Segoe UI', 10, 'bold')).pack(side=tk.LEFT)
-        
-        self.search_var = tk.StringVar()
-        self.search_var.trace('w', lambda *args: self._on_search_change())
-        ttk.Entry(search_inner, textvariable=self.search_var, width=35,
-                 font=('Segoe UI', 11)).pack(side=tk.LEFT, padx=(10, 5))
-        ttk.Button(search_inner, text="X", width=3,
-                  command=lambda: self.search_var.set("")).pack(side=tk.LEFT, padx=(0, 30))
-        
-        ttk.Label(search_inner, text="Filter:", font=('Segoe UI', 10, 'bold')).pack(side=tk.LEFT)
-        self.filter_var = tk.StringVar(value="All")
-        filter_combo = ttk.Combobox(search_inner, textvariable=self.filter_var,
-                                   values=["All", "VIP", "Potential"], state="readonly",
-                                   width=15, font=('Segoe UI', 10))
-        filter_combo.pack(side=tk.LEFT, padx=10)
-        filter_combo.bind('<<ComboboxSelected>>', lambda e: self._on_filter_change())
-        
-        quick_frame = ttk.Frame(search_inner)
-        quick_frame.pack(side=tk.RIGHT)
+        # Responsive search layout - wrap on small screens
+        current_width = self.root.winfo_width()
+        if current_width < 1000:
+            # Mobile-friendly: stack elements
+            top_row = ttk.Frame(search_inner)
+            top_row.pack(fill=tk.X, pady=(0, 10))
+            ttk.Label(top_row, text="Search:", font=('Segoe UI', 10, 'bold')).pack(side=tk.LEFT)
+            self.search_var = tk.StringVar()
+            self.search_var.trace('w', lambda *args: self._on_search_change())
+            ttk.Entry(top_row, textvariable=self.search_var, font=('Segoe UI', 10)).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(10, 5))
+            ttk.Button(top_row, text="X", width=3, command=lambda: self.search_var.set("")).pack(side=tk.LEFT, padx=5)
+            
+            bottom_row = ttk.Frame(search_inner)
+            bottom_row.pack(fill=tk.X)
+            ttk.Label(bottom_row, text="Filter:", font=('Segoe UI', 10, 'bold')).pack(side=tk.LEFT)
+            self.filter_var = tk.StringVar(value="All")
+            filter_combo = ttk.Combobox(bottom_row, textvariable=self.filter_var,
+                                       values=["All", "VIP", "Potential"], state="readonly",
+                                       font=('Segoe UI', 10))
+            filter_combo.pack(side=tk.LEFT, padx=(10, 5), fill=tk.X, expand=True)
+            filter_combo.bind('<<ComboboxSelected>>', lambda e: self._on_filter_change())
+            
+            quick_frame = ttk.Frame(bottom_row)
+            quick_frame.pack(side=tk.RIGHT, padx=(10, 0))
+        else:
+            # Desktop: horizontal layout
+            ttk.Label(search_inner, text="Search:", font=('Segoe UI', 10, 'bold')).pack(side=tk.LEFT)
+            self.search_var = tk.StringVar()
+            self.search_var.trace('w', lambda *args: self._on_search_change())
+            ttk.Entry(search_inner, textvariable=self.search_var, width=25,
+                     font=('Segoe UI', 10)).pack(side=tk.LEFT, padx=(10, 5))
+            ttk.Button(search_inner, text="X", width=3,
+                      command=lambda: self.search_var.set("")).pack(side=tk.LEFT, padx=(0, 20))
+            
+            ttk.Label(search_inner, text="Filter:", font=('Segoe UI', 10, 'bold')).pack(side=tk.LEFT)
+            self.filter_var = tk.StringVar(value="All")
+            filter_combo = ttk.Combobox(search_inner, textvariable=self.filter_var,
+                                       values=["All", "VIP", "Potential"], state="readonly",
+                                       width=12, font=('Segoe UI', 10))
+            filter_combo.pack(side=tk.LEFT, padx=10)
+            filter_combo.bind('<<ComboboxSelected>>', lambda e: self._on_filter_change())
+            
+            quick_frame = ttk.Frame(search_inner)
+            quick_frame.pack(side=tk.RIGHT)
         ttk.Button(quick_frame, text="Add New", command=self._show_add_dialog,
                   style="Modern.TButton").pack(side=tk.LEFT, padx=5)
         ttk.Button(quick_frame, text="Export", command=self._export_to_excel).pack(side=tk.LEFT, padx=5)
@@ -154,9 +240,17 @@ class MainWindow:
         content_frame = ttk.Frame(main_frame)
         content_frame.pack(fill=tk.BOTH, expand=True)
         
+        # Responsive layout: side-by-side on large screens, stacked on small screens
+        current_width = self.root.winfo_width()
+        is_small_screen = current_width < 1200
+        
         table_card = tk.Frame(content_frame, bg=self.COLORS['card'],
                              highlightbackground=self.COLORS['border'], highlightthickness=1)
-        table_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        if is_small_screen:
+            table_card.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        else:
+            table_card.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        self.table_card = table_card
         
         table_header = tk.Frame(table_card, bg=self.COLORS['card'])
         table_header.pack(fill=tk.X, padx=15, pady=(15, 10))
@@ -178,13 +272,23 @@ class MainWindow:
         self.tree.heading("region", text="Region")
         self.tree.heading("interactions", text="#")
         
-        self.tree.column("id", width=70, minwidth=60)
-        self.tree.column("name", width=140, minwidth=100)
-        self.tree.column("phone", width=130, minwidth=100)
-        self.tree.column("email", width=180, minwidth=120)
-        self.tree.column("type", width=80, minwidth=70)
-        self.tree.column("region", width=120, minwidth=80)
-        self.tree.column("interactions", width=40, minwidth=35)
+        # Responsive column widths
+        if current_width < 1000:
+            self.tree.column("id", width=50, minwidth=40)
+            self.tree.column("name", width=100, minwidth=80)
+            self.tree.column("phone", width=90, minwidth=80)
+            self.tree.column("email", width=120, minwidth=100)
+            self.tree.column("type", width=60, minwidth=50)
+            self.tree.column("region", width=80, minwidth=60)
+            self.tree.column("interactions", width=35, minwidth=30)
+        else:
+            self.tree.column("id", width=70, minwidth=60)
+            self.tree.column("name", width=140, minwidth=100)
+            self.tree.column("phone", width=130, minwidth=100)
+            self.tree.column("email", width=180, minwidth=120)
+            self.tree.column("type", width=80, minwidth=70)
+            self.tree.column("region", width=120, minwidth=80)
+            self.tree.column("interactions", width=40, minwidth=35)
         
         y_scroll = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=y_scroll.set)
@@ -198,17 +302,37 @@ class MainWindow:
         action_frame = tk.Frame(table_card, bg=self.COLORS['card'])
         action_frame.pack(fill=tk.X, padx=15, pady=(0, 15))
         
-        ttk.Button(action_frame, text="Edit", command=self._show_edit_dialog).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(action_frame, text="Delete", command=self._delete_customer).pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Interactions", command=self._show_interactions_dialog).pack(side=tk.LEFT, padx=5)
-        ttk.Separator(action_frame, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=15)
-        ttk.Button(action_frame, text="Email Blast", command=self._show_email_blast_dialog).pack(side=tk.LEFT, padx=5)
-        ttk.Button(action_frame, text="Birthdays", command=self._check_birthdays).pack(side=tk.LEFT, padx=5)
+        # Responsive button layout
+        if current_width < 1000:
+            # Stack buttons in two rows for small screens
+            btn_row1 = ttk.Frame(action_frame)
+            btn_row1.pack(fill=tk.X, pady=(0, 5))
+            ttk.Button(btn_row1, text="Edit", command=self._show_edit_dialog).pack(side=tk.LEFT, padx=(0, 5), fill=tk.X, expand=True)
+            ttk.Button(btn_row1, text="Delete", command=self._delete_customer).pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+            ttk.Button(btn_row1, text="View", command=self._show_interactions_dialog).pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+            
+            btn_row2 = ttk.Frame(action_frame)
+            btn_row2.pack(fill=tk.X)
+            ttk.Button(btn_row2, text="Email", command=self._show_email_blast_dialog).pack(side=tk.LEFT, padx=(0, 5), fill=tk.X, expand=True)
+            ttk.Button(btn_row2, text="Birthdays", command=self._check_birthdays).pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        else:
+            # Horizontal layout for large screens
+            ttk.Button(action_frame, text="Edit", command=self._show_edit_dialog).pack(side=tk.LEFT, padx=(0, 5))
+            ttk.Button(action_frame, text="Delete", command=self._delete_customer).pack(side=tk.LEFT, padx=5)
+            ttk.Button(action_frame, text="Interactions", command=self._show_interactions_dialog).pack(side=tk.LEFT, padx=5)
+            ttk.Separator(action_frame, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=15)
+            ttk.Button(action_frame, text="Email Blast", command=self._show_email_blast_dialog).pack(side=tk.LEFT, padx=5)
+            ttk.Button(action_frame, text="Birthdays", command=self._check_birthdays).pack(side=tk.LEFT, padx=5)
         
         chart_card = tk.Frame(content_frame, bg=self.COLORS['card'],
-                             highlightbackground=self.COLORS['border'], highlightthickness=1, width=420)
-        chart_card.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
-        chart_card.pack_propagate(False)
+                             highlightbackground=self.COLORS['border'], highlightthickness=1)
+        if is_small_screen:
+            chart_card.pack(fill=tk.X)
+            chart_card.pack_propagate(True)
+        else:
+            chart_card.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+            chart_card.pack_propagate(False)
+            chart_card.configure(width=420)
         
         chart_header = tk.Frame(chart_card, bg=self.COLORS['card'])
         chart_header.pack(fill=tk.X, padx=15, pady=(15, 5))
@@ -225,9 +349,11 @@ class MainWindow:
             customers = [c for c in customers if c.customer_type == self.current_filter]
         
         if self.current_search:
-            query = self.current_search.lower()
+            # Use fuzzy search on name, phone, and email
             customers = [c for c in customers
-                        if query in c.name.lower() or query in c.phone or query in c.email.lower()]
+                        if (self._fuzzy_match(self.current_search, c.name, threshold=0.6) or
+                            self._fuzzy_match(self.current_search, c.phone, threshold=0.7) or
+                            self._fuzzy_match(self.current_search, c.email, threshold=0.6))]
         
         return customers
     
@@ -273,8 +399,40 @@ class MainWindow:
         return self.crm_service.get_customer(customer_id)
     
     def _on_search_change(self) -> None:
+        """Handle search input with real-time filtering (efficient)."""
         self.current_search = self.search_var.get()
-        self._refresh_table()
+        # Only update the display, don't refresh data from service
+        self._update_table_display()
+    
+    def _update_table_display(self) -> None:
+        """Update table display with current filter and search (efficient - no data reload)."""
+        # Clear table
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        
+        # Get displayed customers (already filtered by current_search)
+        customers = self._get_displayed_customers()
+        
+        # Add to table
+        for customer in customers:
+            tag = 'vip' if customer.customer_type == 'VIP' else 'potential'
+            region = customer.get_region()
+            if len(region) > 15:
+                region = region[:12] + '...'
+            
+            self.tree.insert("", tk.END, values=(
+                customer.id, customer.name, customer.phone, customer.email,
+                customer.customer_type, region, len(customer.interactions)
+            ), tags=(tag,))
+        
+        # Update count
+        total = len(self.crm_service.get_all_customers())
+        displayed = len(customers)
+        
+        if total == displayed:
+            self.count_label.config(text=f"{total} customers")
+        else:
+            self.count_label.config(text=f"{displayed} of {total} customers")
     
     def _on_filter_change(self) -> None:
         self.current_filter = self.filter_var.get()
@@ -438,6 +596,28 @@ class MainWindow:
                            "- Excel export with pandas\n"
                            "- Interactive charts with matplotlib\n\n"
                            "Built with Python, Tkinter, pandas & matplotlib")
+    
+    def _on_window_resize(self, event=None) -> None:
+        """Handle window resize to adjust layout responsively."""
+        current_width = self.root.winfo_width()
+        current_height = self.root.winfo_height()
+        
+        # Only redraw if size change is significant
+        if abs(current_width - self.last_width) > 100 or abs(current_height - self.last_height) > 100:
+            self.last_width = current_width
+            self.last_height = current_height
+            
+            # Adjust layout based on screen size
+            is_small_screen = current_width < 1200
+            if is_small_screen != self.is_responsive_mode:
+                self.is_responsive_mode = is_small_screen
+                # Clear main content and recreate widgets for responsive layout
+                for widget in self.root.winfo_children():
+                    if isinstance(widget, (ttk.Frame, tk.Frame)):
+                        widget.destroy()
+                self._create_widgets()
+                self._refresh_table()
+                self._update_chart()
     
     def _on_closing(self) -> None:
         if messagebox.askokcancel("Quit", "Do you want to quit?"):

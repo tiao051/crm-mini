@@ -30,36 +30,41 @@ class InteractionFormDialog(tk.Toplevel):
         self.on_delete = on_delete
         
         self.title(f"Interactions - {customer.name}")
-        self.geometry("600x500")
+        # Fixed dialog size - compact and clean
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        
+        # Set fixed but reasonable size
+        dialog_width = 550
+        dialog_height = 580
+        
+        # Center on screen
+        x = (screen_width - dialog_width) // 2
+        y = max(50, (screen_height - dialog_height) // 2)
+        
+        self.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
+        self.minsize(500, 550)
         self.resizable(True, True)
-        self.minsize(500, 400)
         
         self.transient(parent)
         self.grab_set()
         
-        self._center_window()
         self._create_widgets()
         self._load_interactions()
-    
-    def _center_window(self) -> None:
-        """Center the dialog on the screen."""
-        self.update_idletasks()
-        width = self.winfo_width()
-        height = self.winfo_height()
-        x = (self.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.winfo_screenheight() // 2) - (height // 2)
-        self.geometry(f"+{x}+{y}")
     
     def _create_widgets(self) -> None:
         """Create and layout form widgets."""
         
-        main_frame = ttk.Frame(self, padding=15)
+        dialog_width = self.winfo_width() if self.winfo_width() > 1 else 600
+        
+        main_frame = ttk.Frame(self, padding=12)
         main_frame.pack(fill=tk.BOTH, expand=True)
         
+        title_size = 11 if dialog_width < 500 else 12
         title_label = ttk.Label(
             main_frame,
             text=f"📋 Interaction History for {self.customer.name}",
-            font=('Segoe UI', 12, 'bold')
+            font=('Segoe UI', title_size, 'bold')
         )
         title_label.pack(pady=(0, 15))
         
@@ -78,8 +83,13 @@ class InteractionFormDialog(tk.Toplevel):
         self.tree.heading("date", text="Date")
         self.tree.heading("content", text="Content")
         
-        self.tree.column("date", width=100, minwidth=80)
-        self.tree.column("content", width=400, minwidth=200)
+        # Responsive column widths
+        if dialog_width < 500:
+            self.tree.column("date", width=70, minwidth=60)
+            self.tree.column("content", width=250, minwidth=150)
+        else:
+            self.tree.column("date", width=100, minwidth=80)
+            self.tree.column("content", width=400, minwidth=200)
         
         scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
@@ -97,35 +107,59 @@ class InteractionFormDialog(tk.Toplevel):
         add_frame = ttk.LabelFrame(main_frame, text="Add New Interaction", padding=10)
         add_frame.pack(fill=tk.X, pady=(15, 0))
         
-        # Date field
-        date_row = ttk.Frame(add_frame)
-        date_row.pack(fill=tk.X, pady=(0, 10))
-        
-        ttk.Label(date_row, text="Date:").pack(side=tk.LEFT)
-        
-        today = datetime.now().strftime("%Y-%m-%d")
-        self.date_var = tk.StringVar(value=today)
-        self.date_entry = ttk.Entry(date_row, textvariable=self.date_var, width=15)
-        self.date_entry.pack(side=tk.LEFT, padx=(10, 0))
-        
-        ttk.Label(date_row, text="(YYYY-MM-DD)", foreground="gray").pack(side=tk.LEFT, padx=(5, 0))
-        
-        # Today button
-        today_btn = ttk.Button(
-            date_row,
-            text="Today",
-            command=lambda: self.date_var.set(datetime.now().strftime("%Y-%m-%d")),
-            width=8
-        )
-        today_btn.pack(side=tk.LEFT, padx=(10, 0))
+        # Responsive layout for date field
+        if dialog_width < 500:
+            # Stacked layout for small screens
+            date_row = ttk.Frame(add_frame)
+            date_row.pack(fill=tk.X, pady=(0, 10))
+            
+            ttk.Label(date_row, text="Date:").pack(anchor=tk.W)
+            
+            today = datetime.now().strftime("%Y-%m-%d")
+            self.date_var = tk.StringVar(value=today)
+            date_entry_row = ttk.Frame(add_frame)
+            date_entry_row.pack(fill=tk.X, pady=(0, 10))
+            
+            self.date_entry = ttk.Entry(date_entry_row, textvariable=self.date_var)
+            self.date_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+            
+            today_btn = ttk.Button(
+                date_entry_row,
+                text="Today",
+                command=lambda: self.date_var.set(datetime.now().strftime("%Y-%m-%d")),
+                width=6
+            )
+            today_btn.pack(side=tk.LEFT)
+        else:
+            # Horizontal layout for large screens
+            date_row = ttk.Frame(add_frame)
+            date_row.pack(fill=tk.X, pady=(0, 10))
+            
+            ttk.Label(date_row, text="Date:").pack(side=tk.LEFT)
+            
+            today = datetime.now().strftime("%Y-%m-%d")
+            self.date_var = tk.StringVar(value=today)
+            self.date_entry = ttk.Entry(date_row, textvariable=self.date_var, width=15)
+            self.date_entry.pack(side=tk.LEFT, padx=(10, 0))
+            
+            ttk.Label(date_row, text="(YYYY-MM-DD)", foreground="gray").pack(side=tk.LEFT, padx=(5, 0))
+            
+            today_btn = ttk.Button(
+                date_row,
+                text="Today",
+                command=lambda: self.date_var.set(datetime.now().strftime("%Y-%m-%d")),
+                width=8
+            )
+            today_btn.pack(side=tk.LEFT, padx=(10, 0))
         
         content_row = ttk.Frame(add_frame)
-        content_row.pack(fill=tk.X, pady=(0, 10))
+        content_row.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
         
         ttk.Label(content_row, text="Content:").pack(side=tk.LEFT, anchor=tk.N)
         
-        self.content_text = tk.Text(content_row, height=3, width=50, wrap=tk.WORD)
-        self.content_text.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(10, 0))
+        text_height = 2 if dialog_width < 500 else 3
+        self.content_text = tk.Text(content_row, height=text_height, wrap=tk.WORD)
+        self.content_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 0))
         
         add_btn = ttk.Button(
             add_frame,

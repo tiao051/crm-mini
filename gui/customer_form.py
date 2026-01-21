@@ -4,7 +4,7 @@ Clean design with proper validation feedback.
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 from typing import Optional, Callable, Tuple
 from datetime import datetime
 
@@ -46,58 +46,96 @@ class CustomerFormDialog(tk.Toplevel):
         self.result = None
         
         self.title("➕ Add Customer" if customer is None else "✏️ Edit Customer")
-        self.geometry("480x520")
-        self.resizable(False, False)
+        # Fixed dialog size - compact and clean
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        
+        # Set fixed but reasonable size
+        dialog_width = 500
+        dialog_height = 620
+        
+        # Center on screen
+        x = (screen_width - dialog_width) // 2
+        y = max(50, (screen_height - dialog_height) // 2)
+        
+        self.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
+        self.minsize(480, 600)
+        self.resizable(True, True)
         self.configure(bg=self.COLORS['bg'])
         self.transient(parent)
         self.grab_set()
         
-        self._center_window()
         self._create_widgets()
         
         if customer:
             self._populate_fields()
     
-    def _center_window(self) -> None:
-        self.update_idletasks()
-        x = (self.winfo_screenwidth() // 2) - 240
-        y = (self.winfo_screenheight() // 2) - 260
-        self.geometry(f"+{x}+{y}")
-    
     def _create_widgets(self) -> None:
-        main_frame = tk.Frame(self, bg=self.COLORS['bg'], padx=30, pady=25)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        # Responsive padding based on dialog width
+        dialog_width = self.winfo_width() if self.winfo_width() > 1 else 480
+        padx = 20 if dialog_width < 450 else 30
+        pady = 20 if dialog_width < 450 else 25
+        title_size = 14 if dialog_width < 450 else 16
+        
+        # Main container with vertical layout (form + buttons)
+        container = tk.Frame(self, bg=self.COLORS['bg'])
+        container.pack(fill=tk.BOTH, expand=True, padx=padx, pady=pady)
+        
+        # Create scrollable area for form fields
+        content_frame = tk.Frame(container, bg=self.COLORS['bg'])
+        content_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+        
+        if dialog_width < 450:
+            canvas = tk.Canvas(content_frame, bg=self.COLORS['bg'], highlightthickness=0)
+            scrollbar = ttk.Scrollbar(content_frame, orient="vertical", command=canvas.yview)
+            scrollable_frame = tk.Frame(canvas, bg=self.COLORS['bg'])
+            
+            scrollable_frame.bind(
+                "<Configure>",
+                lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+            )
+            
+            canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+            
+            canvas.pack(side="left", fill="both", expand=True)
+            scrollbar.pack(side="right", fill="y")
+            
+            form_parent = scrollable_frame
+        else:
+            form_parent = content_frame
         
         title_text = "Add New Customer" if self.customer is None else "Edit Customer"
         tk.Label(
-            main_frame,
+            form_parent,
             text=title_text,
-            font=('Segoe UI', 16, 'bold'),
+            font=('Segoe UI', title_size, 'bold'),
             bg=self.COLORS['bg'],
             fg=self.COLORS['text']
-        ).pack(anchor=tk.W, pady=(0, 20))
+        ).pack(anchor=tk.W, pady=(0, 15))
         
-        self._create_field(main_frame, "Full Name *", "name")
-        self._create_field(main_frame, "Phone Number *", "phone")
-        self._create_field(main_frame, "Email Address *", "email")
-        self._create_type_field(main_frame)
-        self._create_field(main_frame, "Address", "address")
-        self._create_date_field(main_frame)
+        self._create_field(form_parent, "Full Name *", "name")
+        self._create_field(form_parent, "Phone Number *", "phone")
+        self._create_field(form_parent, "Email Address *", "email")
+        self._create_type_field(form_parent)
+        self._create_field(form_parent, "Address", "address")
+        self._create_date_field(form_parent)
         
-        # Error label
+        # Error label inside scrollable area
         self.error_label = tk.Label(
-            main_frame,
+            form_parent,
             text="",
             font=('Segoe UI', 9),
             bg=self.COLORS['bg'],
             fg=self.COLORS['error'],
-            wraplength=400,
+            wraplength=int(dialog_width * 0.8),
             justify=tk.LEFT
         )
         self.error_label.pack(anchor=tk.W, pady=(15, 0))
         
-        btn_frame = tk.Frame(main_frame, bg=self.COLORS['bg'])
-        btn_frame.pack(fill=tk.X, pady=(20, 0))
+        # Button frame - FIXED at bottom (outside scrollable area)
+        btn_frame = tk.Frame(container, bg=self.COLORS['bg'])
+        btn_frame.pack(fill=tk.X, pady=(10, 0), side=tk.BOTTOM)
         
         tk.Label(
             btn_frame,
@@ -146,7 +184,7 @@ class CustomerFormDialog(tk.Toplevel):
     def _create_field(self, parent, label: str, field_name: str) -> None:
         """Create a modern input field."""
         frame = tk.Frame(parent, bg=self.COLORS['bg'])
-        frame.pack(fill=tk.X, pady=(0, 12))
+        frame.pack(fill=tk.X, pady=(0, 8))  # Reduced from (0, 12)
         
         tk.Label(
             frame,
@@ -168,7 +206,7 @@ class CustomerFormDialog(tk.Toplevel):
             highlightcolor=self.COLORS['primary'],
             highlightbackground=self.COLORS['border']
         )
-        entry.pack(fill=tk.X, pady=(5, 0), ipady=8)
+        entry.pack(fill=tk.X, pady=(5, 0), ipady=6)  # Reduced ipady from 8
         
         setattr(self, f"{field_name}_var", var)
         setattr(self, f"{field_name}_entry", entry)
@@ -176,7 +214,7 @@ class CustomerFormDialog(tk.Toplevel):
     def _create_type_field(self, parent) -> None:
         """Create customer type dropdown."""
         frame = tk.Frame(parent, bg=self.COLORS['bg'])
-        frame.pack(fill=tk.X, pady=(0, 12))
+        frame.pack(fill=tk.X, pady=(0, 8))  # Reduced from (0, 12)
         
         tk.Label(
             frame,
@@ -191,7 +229,7 @@ class CustomerFormDialog(tk.Toplevel):
         type_frame = tk.Frame(frame, bg=self.COLORS['bg'])
         type_frame.pack(fill=tk.X, pady=(5, 0))
         
-        vip_frame = tk.Frame(type_frame, bg='#fef3c7', padx=15, pady=8)
+        vip_frame = tk.Frame(type_frame, bg='#fef3c7', padx=15, pady=6)  # Reduced pady from 8
         vip_frame.pack(side=tk.LEFT, padx=(0, 10))
         
         ttk.Radiobutton(
@@ -201,7 +239,7 @@ class CustomerFormDialog(tk.Toplevel):
             value="VIP"
         ).pack()
         
-        pot_frame = tk.Frame(type_frame, bg='#dbeafe', padx=15, pady=8)
+        pot_frame = tk.Frame(type_frame, bg='#dbeafe', padx=15, pady=6)  # Reduced pady from 8
         pot_frame.pack(side=tk.LEFT)
         
         ttk.Radiobutton(
@@ -214,7 +252,7 @@ class CustomerFormDialog(tk.Toplevel):
     def _create_date_field(self, parent) -> None:
         """Create date of birth field with dropdowns."""
         frame = tk.Frame(parent, bg=self.COLORS['bg'])
-        frame.pack(fill=tk.X, pady=(0, 12))
+        frame.pack(fill=tk.X, pady=(0, 8))  # Reduced from (0, 12)
         
         tk.Label(
             frame,
