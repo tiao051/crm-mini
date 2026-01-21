@@ -3,6 +3,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from typing import Optional, List
+from datetime import datetime
 import os
 import re
 from difflib import SequenceMatcher
@@ -11,9 +12,11 @@ from models.customer import Customer
 from services.crm_service import CRMService
 from services.report_service import ReportService
 from services.data_service import DataService
+from services.email_service import EmailService
 from gui.customer_form import CustomerFormDialog
 from gui.interaction_form import InteractionFormDialog
 from gui.chart_frame import ChartFrame
+from gui.email_dialog import EmailDialog, EmailSettingsDialog
 
 
 class MainWindow:
@@ -146,8 +149,13 @@ class MainWindow:
         
         marketing_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Marketing", menu=marketing_menu)
+        marketing_menu.add_command(label="Send Email to Customer", command=self._send_email_to_selected)
         marketing_menu.add_command(label="Email Blast - All", command=lambda: self._email_blast("All"))
         marketing_menu.add_command(label="Email Blast - VIP", command=lambda: self._email_blast("VIP"))
+        marketing_menu.add_command(label="Email Blast - Potential", command=lambda: self._email_blast("Potential"))
+        marketing_menu.add_separator()
+        marketing_menu.add_command(label="Email Settings", command=self._show_email_settings)
+        marketing_menu.add_command(label="View Email Log", command=self._show_email_log)
         marketing_menu.add_command(label="Email Blast - Potential", command=lambda: self._email_blast("Potential"))
         marketing_menu.add_separator()
         marketing_menu.add_command(label="Check Birthdays", command=self._check_birthdays)
@@ -619,6 +627,64 @@ class MainWindow:
                 self._refresh_table()
                 self._update_chart()
     
+    def _send_email_to_selected(self) -> None:
+        """Open email dialog to send email to selected customer."""
+        customer = self._get_selected_customer()
+        if not customer:
+            messagebox.showwarning("No Selection", "Please select a customer to send email to.")
+            return
+        
+        def on_send_callback():
+            messagebox.showinfo("Success", f"Email sent to {customer.name}!")
+            # Add interaction to customer record
+            self.crm_service.add_interaction(customer.id, datetime.now().strftime("%Y-%m-%d"), 
+                                             f"Received email: [automated message]")
+            self._refresh_table()
+        
+        EmailDialog(self.root, customer, on_send_callback)
+    
+    def _show_email_settings(self) -> None:
+        """Open email settings dialog."""
+        EmailSettingsDialog(self.root)
+    
+    def _show_email_log(self) -> None:
+        """Show email log window."""
+        email_service = EmailService()
+        log = email_service.get_email_log(100)
+        
+        if not log:
+            messagebox.showinfo("Email Log", "No emails have been sent yet.")
+            return
+        
+        # Create log window
+        log_window = tk.Toplevel(self.root)
+        log_window.title("Email Log")
+        log_window.geometry("700x500")
+        log_window.transient(self.root)
+        
+        # Create treeview
+        columns = ("Timestamp", "Recipient", "Subject")
+        tree = ttk.Treeview(log_window, columns=columns, height=20)
+        tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        tree.column("#0", width=0, stretch=tk.NO)
+        tree.column("Timestamp", anchor=tk.W, width=150)
+        tree.column("Recipient", anchor=tk.W, width=200)
+        tree.column("Subject", anchor=tk.W, width=350)
+        
+        tree.heading("#0", text="", anchor=tk.W)
+        tree.heading("Timestamp", text="Timestamp", anchor=tk.W)
+        tree.heading("Recipient", text="Recipient", anchor=tk.W)
+        tree.heading("Subject", text="Subject", anchor=tk.W)
+        
+        # Add data
+        for item in log:
+            timestamp = item.get("timestamp", "").split("T")[0] + " " + item.get("timestamp", "").split("T")[1][:5] if "T" in item.get("timestamp", "") else item.get("timestamp", "")
+            recipient = item.get("recipient_name", "")
+            subject = item.get("subject", "")
+            tree.insert("", tk.END, values=(timestamp, recipient, subject))
+    
+
     def _on_closing(self) -> None:
         if messagebox.askokcancel("Quit", "Do you want to quit?"):
             self.root.destroy()
