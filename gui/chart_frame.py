@@ -108,7 +108,8 @@ class ChartFrame(ttk.Frame):
         # Responsive figure size
         container_width = self.chart_container.winfo_width()
         if container_width < 1:
-            container_width = 400
+            # Fallback to a reasonable default based on screen width
+            container_width = int(self.winfo_screenwidth() * 0.25)  # 25% of screen
         figsize_width = max(5, int(container_width / 100))
         figsize_height = max(3, int(figsize_width * 0.5))
         
@@ -175,7 +176,8 @@ class ChartFrame(ttk.Frame):
         # Responsive figure size
         container_width = self.chart_container.winfo_width()
         if container_width < 1:
-            container_width = 400
+            # Fallback to a reasonable default based on screen width
+            container_width = int(self.winfo_screenwidth() * 0.25)  # 25% of screen
         figsize_width = max(5, int(container_width / 100))
         figsize_height = max(3, int(figsize_width * 0.5))
         

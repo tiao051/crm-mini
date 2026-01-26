@@ -35,14 +35,8 @@ class MainWindow:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("Mini CRM - Customer Relationship Management")
-        # Get screen dimensions for responsive sizing
-        screen_width = self.root.winfo_screenwidth()
-        screen_height = self.root.winfo_screenheight()
-        # Default to 80% of screen or min size
-        default_width = max(int(screen_width * 0.8), 1024)
-        default_height = max(int(screen_height * 0.8), 700)
-        self.root.geometry(f"{default_width}x{default_height}")
-        self.root.minsize(800, 600)  # Lower minimum for small laptops
+        # Set window to fullscreen
+        self.root.state('zoomed')  # Windows/Linux
         self.root.configure(bg=self.COLORS['bg'])
         # Bind resize event to handle layout adjustments
         self.root.bind('<Configure>', self._on_window_resize)
@@ -53,17 +47,20 @@ class MainWindow:
         
         self.current_filter = "All"
         self.current_search = ""
-        self.last_width = default_width
-        self.last_height = default_height
-        self.is_responsive_mode = default_width < 1200  # Flag for single column layout
+        self.last_width = self.root.winfo_screenwidth()
+        self.last_height = self.root.winfo_screenheight()
+        self.is_responsive_mode = self.last_width < 1200  # Flag for single column layout
         
         self._apply_theme()
         self._create_menu()
         self._create_widgets()
         self._refresh_table()
-        self._update_chart()
         
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+        
+        # Force geometry calculation and update chart after window is fully rendered
+        self.root.update_idletasks()
+        self.root.after(200, self._update_chart)
     
     def _get_responsive_font_size(self, base_size: int) -> int:
         """Calculate responsive font size based on window width."""
