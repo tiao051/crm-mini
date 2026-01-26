@@ -17,6 +17,7 @@ from gui.customer_form import CustomerFormDialog
 from gui.interaction_form import InteractionFormDialog
 from gui.chart_frame import ChartFrame
 from gui.email_dialog import EmailDialog, EmailSettingsDialog
+from services.email_service import EmailService
 
 
 class MainWindow:
@@ -44,6 +45,7 @@ class MainWindow:
         self.data_service = DataService()
         self.crm_service = CRMService(self.data_service)
         self.report_service = ReportService()
+        self.email_service = EmailService()
         
         self.current_filter = "All"
         self.current_search = ""
@@ -551,20 +553,108 @@ class MainWindow:
         ttk.Button(dialog, text="Send Blast", command=send, style="Modern.TButton").pack(pady=20)
     
     def _email_blast(self, target: str) -> None:
+        """Send real bulk emails to customers."""
+        from services.email_templates import TEMPLATES
+        
+        # Check if email is configured
+        if not self.email_service.config.is_configured():
+            messagebox.showwarning(
+                "Email Not Configured",
+                "Please configure email settings first.\n\n" +
+                "Go to Marketing → Email Settings"
+            )
+            return
+        
+        # Get target customers
         count, emails = self.crm_service.simulate_email_blast(target)
         
         if count == 0:
             messagebox.showinfo("Email Blast", f"No {target} customers to send emails to.")
             return
         
+        # Confirm before sending
         preview = "\n".join([f"- {e}" for e in emails[:5]])
         if count > 5:
             preview += f"\n- ... and {count - 5} more"
         
-        messagebox.showinfo("Email Blast Sent!",
-                           f"Email blast simulated successfully!\n\n"
-                           f"Target: {target}\nRecipients: {count}\n\n"
-                           f"Sample:\n{preview}\n\n(Simulation only - no real emails sent)")
+        confirm = messagebox.askyesno(
+            "Confirm Email Blast",
+            f"Send emails to {count} {target} customers?\n\n" +
+            f"Recipients:\n{preview}\n\n" +
+            "⚠️ This will send REAL emails!"
+        )
+        
+        if not confirm:
+            return
+        
+        # Get template
+        template = TEMPLATES.get('promotional')
+        subject = template.subject
+        body = template.body
+        
+        # Create progress window
+        progress_window = tk.Toplevel(self.root)
+        progress_window.title("Sending Emails...")
+        progress_window.geometry("400x150")
+        progress_window.resizable(False, False)
+        progress_window.transient(self.root)
+        
+        ttk.Label(progress_window, text=f"Sending emails to {count} customers...",
+                 font=('Segoe UI', 10, 'bold')).pack(pady=10)
+        
+        progress_bar = ttk.Progressbar(progress_window, length=350, mode='determinate',
+                                       maximum=count)
+        progress_bar.pack(pady=10, padx=25)
+        
+        status_label = ttk.Label(progress_window, text="0 / " + str(count),
+                                font=('Segoe UI', 9))
+        status_label.pack(pady=5)
+        
+        # Send emails
+        success_count = 0
+        fail_count = 0
+        errors = []
+        
+        for idx, email in enumerate(emails):
+            try:
+                success, msg = self.email_service.send_email(
+                    email, subject, body, None
+                )
+                if success:
+                    success_count += 1
+                else:
+                    fail_count += 1
+                    errors.append(f"{email}: {msg}")
+            except Exception as e:
+                fail_count += 1
+                errors.append(f"{email}: {str(e)}")
+            
+            # Update progress
+            progress_bar['value'] = idx + 1
+            status_label.config(text=f"{idx + 1} / {count}")
+            progress_window.update()
+            
+            # Small delay to avoid overwhelming SMTP server
+            self.root.after(100)
+        
+        progress_window.destroy()
+        
+        # Show results
+        if fail_count == 0:
+            messagebox.showinfo(
+                "✅ Email Blast Sent!",
+                f"Successfully sent {success_count} emails to {target} customers!"
+            )
+        else:
+            error_preview = "\n".join(errors[:5])
+            if len(errors) > 5:
+                error_preview += f"\n... and {len(errors) - 5} more errors"
+            
+            messagebox.showwarning(
+                "⚠️ Email Blast Completed",
+                f"Sent: {success_count} / Failed: {fail_count}\n\n" +
+                f"Errors:\n{error_preview}"
+            )
     
     def _export_to_excel(self) -> None:
         filepath = filedialog.asksaveasfilename(
