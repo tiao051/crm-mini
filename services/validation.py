@@ -23,12 +23,9 @@ def validate_email(email: str) -> Tuple[bool, str]:
     if not email:
         return False, "Email is required"
     
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    
-    if re.match(pattern, email):
+    if re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
         return True, ""
-    else:
-        return False, "Invalid email format (e.g., name@example.com)"
+    return False, "Invalid email format (e.g., name@example.com)"
 
 
 def validate_phone(phone: str) -> Tuple[bool, str]:
@@ -38,12 +35,9 @@ def validate_phone(phone: str) -> Tuple[bool, str]:
     
     cleaned = re.sub(r'[\s\-\(\)\.]', '', phone)
     
-    pattern = r'^\+?[0-9]{9,15}$'
-    
-    if re.match(pattern, cleaned):
+    if re.match(r'^\+?[0-9]{9,15}$', cleaned):
         return True, ""
-    else:
-        return False, "Invalid phone format (9-15 digits, may include +, -, spaces)"
+    return False, "Invalid phone format (9-15 digits, may include +, -, spaces)"
 
 
 def validate_date(date_str: str) -> Tuple[bool, str]:
@@ -51,9 +45,7 @@ def validate_date(date_str: str) -> Tuple[bool, str]:
     if not date_str:
         return False, "Date is required"
     
-    pattern = r'^(\d{4})-(\d{2})-(\d{2})$'
-    
-    match = re.match(pattern, date_str)
+    match = re.match(r'^(\d{4})-(\d{2})-(\d{2})$', date_str)
     if not match:
         return False, "Invalid date format (use YYYY-MM-DD)"
     
@@ -68,10 +60,7 @@ def validate_date(date_str: str) -> Tuple[bool, str]:
     if not (1 <= day <= 31):
         return False, "Day must be between 1 and 31"
     
-    days_in_month = {
-        1: 31, 2: 29, 3: 31, 4: 30, 5: 31, 6: 30,
-        7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31
-    }
+    days_in_month = {1: 31, 2: 29, 3: 31, 4: 30, 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31}
     
     if day > days_in_month[month]:
         return False, f"Day {day} is invalid for month {month}"
@@ -87,9 +76,7 @@ def validate_name(name: str) -> Tuple[bool, str]:
     if len(name.strip()) < 2:
         return False, "Name must be at least 2 characters"
     
-    pattern = r"^[a-zA-Z\s\-'\.]+$"
-    
-    if not re.match(pattern, name):
+    if not re.match(r"^[a-zA-Z\s\-'\.]+$", name):
         return False, "Name can only contain letters, spaces, hyphens, and apostrophes"
     
     return True, ""
@@ -97,13 +84,11 @@ def validate_name(name: str) -> Tuple[bool, str]:
 
 def validate_customer_type(customer_type: str) -> Tuple[bool, str]:
     """Validate customer type (must be 'VIP' or 'Potential')."""
-    valid_types = ["VIP", "Potential"]
-    
     if not customer_type:
         return False, "Customer type is required"
     
-    if customer_type not in valid_types:
-        return False, f"Customer type must be one of: {', '.join(valid_types)}"
+    if customer_type not in ["VIP", "Potential"]:
+        return False, "Customer type must be one of: VIP, Potential"
     
     return True, ""
 

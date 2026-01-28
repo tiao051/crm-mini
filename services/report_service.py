@@ -1,6 +1,7 @@
 """Report Service - Excel export and chart generation using pandas and matplotlib."""
 
 import os
+import logging
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 
@@ -11,6 +12,8 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
 from models.customer import Customer
+
+logger = logging.getLogger(__name__)
 
 
 class ReportService:
@@ -27,7 +30,7 @@ class ReportService:
         """Create export directory if it doesn't exist."""
         if not os.path.exists(self.export_dir):
             os.makedirs(self.export_dir)
-            print(f"Created export directory: {self.export_dir}")
+            logger.info(f"Created export directory: {self.export_dir}")
     
     def export_to_excel(
         self,
@@ -76,16 +79,17 @@ class ReportService:
             )
             
             print(f"Successfully exported {len(customers)} customers to {filepath}")
+            logger.info(f"Successfully exported {len(customers)} customers to {filepath}")
             return True, filepath
             
         except PermissionError:
             error_msg = f"Permission denied. Cannot write to {filepath}"
-            print(f"Error: {error_msg}")
+            logger.error(error_msg)
             return False, error_msg
             
         except Exception as e:
             error_msg = f"Error exporting to Excel: {str(e)}"
-            print(error_msg)
+            logger.error(error_msg)
             return False, error_msg
     
     def create_customer_type_chart(
@@ -235,4 +239,4 @@ if __name__ == "__main__":
     test_stats = {"VIP": 12, "Potential": 18}
     fig = service.create_customer_type_chart(test_stats, "pie")
     fig.savefig("test_chart.png")
-    print("Test chart saved to test_chart.png")
+    logger.info("Test chart saved to test_chart.png")

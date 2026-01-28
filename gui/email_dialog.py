@@ -93,19 +93,12 @@ class EmailDialog:
         
         self.body_text = tk.Text(
             body_frame,
-            height=15,
             width=60,
             yscrollcommand=scrollbar.set,
             wrap=tk.WORD
         )
         self.body_text.pack(fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.body_text.yview)
-        
-        # --- Variables hint ---
-        hint_text = "Available variables: {customer_name}, {email}, {phone}, {customer_type}, {address}"
-        ttk.Label(main_frame, text=hint_text, font=("Arial", 8), foreground="#6b7280").pack(
-            anchor=tk.W, pady=(0, 12)
-        )
         
         # --- Buttons ---
         button_frame = ttk.Frame(main_frame)
@@ -187,7 +180,7 @@ class EmailDialog:
 
 
 class EmailSettingsDialog:
-    """Dialog for configuring email settings."""
+    """Dialog for configuring email settings (sender name only)."""
     
     def __init__(self, parent):
         """Create email settings dialog."""
@@ -197,7 +190,7 @@ class EmailSettingsDialog:
         
         self.dialog = tk.Toplevel(parent)
         self.dialog.title("Email Settings")
-        self.dialog.geometry("600x400")
+        self.dialog.geometry("500x280")
         self.dialog.resizable(False, False)
         
         # Center on parent
@@ -217,106 +210,69 @@ class EmailSettingsDialog:
         # Title
         ttk.Label(
             main_frame,
-            text="Email Configuration (SMTP)",
+            text="Email Settings",
             font=("Arial", 12, "bold")
-        ).pack(anchor=tk.W, pady=(0, 20))
-        
-        # SMTP Server
-        ttk.Label(main_frame, text="SMTP Server:").pack(anchor=tk.W)
-        self.server_entry = ttk.Entry(main_frame, width=50)
-        self.server_entry.pack(fill=tk.X, pady=(0, 12))
-        self.server_entry.insert(0, self.config.settings.get("smtp_server", "smtp.gmail.com"))
-        
-        # SMTP Port
-        ttk.Label(main_frame, text="SMTP Port:").pack(anchor=tk.W)
-        self.port_entry = ttk.Entry(main_frame, width=50)
-        self.port_entry.pack(fill=tk.X, pady=(0, 12))
-        self.port_entry.insert(0, str(self.config.settings.get("smtp_port", 587)))
-        
-        # Sender Email
-        ttk.Label(main_frame, text="Sender Email Address:").pack(anchor=tk.W)
-        self.email_entry = ttk.Entry(main_frame, width=50)
-        self.email_entry.pack(fill=tk.X, pady=(0, 12))
-        self.email_entry.insert(0, self.config.settings.get("sender_email", ""))
-        
-        # Sender Password/App Password
-        ttk.Label(main_frame, text="Password (App Password for Gmail):").pack(anchor=tk.W)
-        self.password_entry = ttk.Entry(main_frame, width=50, show="•")
-        self.password_entry.pack(fill=tk.X, pady=(0, 12))
-        
-        # Sender Name
-        ttk.Label(main_frame, text="Sender Name:").pack(anchor=tk.W)
-        self.name_entry = ttk.Entry(main_frame, width=50)
-        self.name_entry.pack(fill=tk.X, pady=(0, 20))
-        self.name_entry.insert(0, self.config.settings.get("sender_name", "CRM System"))
+        ).pack(anchor=tk.W, pady=(0, 15))
         
         # Info text
         info_text = ttk.Label(
             main_frame,
-            text="💡 For Gmail: Use App Password (Generate from Security Settings)",
+            text="Configure sender display name.\nSMTP & sender email are configured in .env file.",
             font=("Arial", 9),
             foreground="#6b7280"
         )
-        info_text.pack(anchor=tk.W, pady=(0, 20))
+        info_text.pack(anchor=tk.W, pady=(0, 15))
+        
+        # Sender Email Info (read-only)
+        sender_email = self.config.settings.get("sender_email", "Not configured")
+        ttk.Label(main_frame, text="Sender Email:").pack(anchor=tk.W)
+        email_display = ttk.Entry(main_frame, width=50, state='readonly')
+        email_display.pack(fill=tk.X, pady=(0, 15))
+        email_display.insert(0, sender_email)
+        
+        # Sender Name
+        ttk.Label(main_frame, text="Sender Name (Display Name):").pack(anchor=tk.W)
+        self.name_entry = ttk.Entry(main_frame, width=50)
+        self.name_entry.pack(fill=tk.X, pady=(0, 20))
+        self.name_entry.insert(0, self.config.settings.get("sender_name", "CRM System"))
         
         # Buttons
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, side=tk.BOTTOM)
         
         ttk.Button(button_frame, text="Cancel", command=self.dialog.destroy).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(button_frame, text="Test Connection", command=self._test_connection).pack(side=tk.RIGHT, padx=(5, 0))
         ttk.Button(button_frame, text="Save Settings", command=self._save_settings).pack(side=tk.RIGHT)
     
-    def _test_connection(self):
-        """Test SMTP connection."""
-        email = self.email_entry.get().strip()
-        password = self.password_entry.get().strip()
-        server = self.server_entry.get().strip()
-        
-        try:
-            port = int(self.port_entry.get().strip())
-        except ValueError:
-            messagebox.showerror("Error", "Invalid port number")
-            return
-        
-        if not email or not password:
-            messagebox.showerror("Error", "Please enter email and password")
-            return
-        
-        try:
-            with smtplib.SMTP(server, port, timeout=10) as smtp:
-                smtp.starttls()
-                smtp.login(email, password)
-            messagebox.showinfo("Success", "Connection test passed!")
-        except Exception as e:
-            messagebox.showerror("Connection Error", f"Failed to connect:\n{str(e)}")
-    
     def _save_settings(self):
-        """Save email settings."""
+        """Save email settings with error handling."""
         try:
-            port = int(self.port_entry.get().strip())
-        except ValueError:
-            messagebox.showerror("Error", "Invalid port number")
-            return
+            name = self.name_entry.get().strip()
+            
+            settings = {
+                "sender_name": name or "CRM System",
+                "smtp_server": self.config.settings.get("smtp_server"),
+                "smtp_port": self.config.settings.get("smtp_port"),
+                "sender_email": self.config.settings.get("sender_email"),
+                "sender_password": self.config.settings.get("sender_password")
+            }
+            
+            # Validate critical settings
+            if not settings.get("sender_email"):
+                raise ValueError("SENDER_EMAIL not configured in .env file")
+            
+            if not settings.get("sender_password"):
+                raise ValueError("SENDER_PASSWORD not configured in .env file")
+            
+            # Save config
+            self.config.settings = settings
+            if self.config.save_config(settings):
+                messagebox.showinfo("Success", "Email settings saved!")
+                self.dialog.destroy()
+            else:
+                messagebox.showerror("Error", "Failed to save settings")
         
-        settings = {
-            "smtp_server": self.server_entry.get().strip(),
-            "smtp_port": port,
-            "sender_email": self.email_entry.get().strip(),
-            "sender_password": self.password_entry.get().strip(),
-            "sender_name": self.name_entry.get().strip()
-        }
-        
-        if not settings["sender_email"] or not settings["sender_password"]:
-            messagebox.showerror("Error", "Email and password are required")
-            return
-        
-        self.config.settings = settings
-        if self.config.save_config(settings):
-            messagebox.showinfo("Success", "Email settings saved!")
-            self.dialog.destroy()
-        else:
-            messagebox.showerror("Error", "Failed to save settings")
+        except ValueError as e:
+            messagebox.showerror("Configuration Error", str(e))
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred:\n{str(e)}")
 
-
-import smtplib  # Import at top for _test_connection method

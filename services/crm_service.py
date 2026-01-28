@@ -3,14 +3,16 @@ Core business logic for the CRM application.
 Provides CRUD operations, search, filter, and CRM-specific features.
 """
 
+import logging
 from datetime import datetime
 from typing import List, Optional, Tuple
-import uuid
 
 from models.customer import Customer
 from models.interaction import Interaction
 from services.data_service import DataService
 from services.validation import validate_all_customer_fields, ValidationError
+
+logger = logging.getLogger(__name__)
 
 
 class CRMService:
@@ -40,18 +42,17 @@ class CRMService:
         return self.data_service.save_data(self.customers)
     
     def generate_customer_id(self) -> str:
-        """Generate a unique customer ID (format: CUS001, CUS002, etc)."""
+        """Generate unique customer ID (format: CUS001, CUS002, etc)."""
         if not self.customers:
             return "CUS001"
         
-        max_num = 0
-        for customer in self.customers:
-            if customer.id.startswith("CUS"):
-                try:
-                    num = int(customer.id[3:])
-                    max_num = max(max_num, num)
-                except ValueError:
-                    continue
+        max_num = max(
+            (int(customer.id[3:]) 
+             for customer in self.customers 
+             if customer.id.startswith("CUS") and len(customer.id) > 3
+             and customer.id[3:].isdigit()),
+            default=0
+        )
         
         return f"CUS{max_num + 1:03d}"
     
@@ -257,26 +258,17 @@ class CRMService:
     
     def search_customers(self, query: str) -> List[Customer]:
         """Search customers by name, phone, or email (case-insensitive)."""
-        if not query:
+        if not query.strip():
             return self.customers.copy()
         
         query_lower = query.lower().strip()
-        results = []
         
-        for customer in self.customers:
-            if query_lower in customer.name.lower():
-                results.append(customer)
-                continue
-            
-            if query in customer.phone:
-                results.append(customer)
-                continue
-            
-            if query_lower in customer.email.lower():
-                results.append(customer)
-                continue
-        
-        return results
+        return [
+            customer for customer in self.customers
+            if query_lower in customer.name.lower()
+               or query in customer.phone
+               or query_lower in customer.email.lower()
+        ]
     
     def filter_by_type(self, customer_type: str) -> List[Customer]:
         """
@@ -325,12 +317,7 @@ class CRMService:
         return len(emails), emails
     
     def get_customer_type_stats(self) -> dict:
-        """
-        Get statistics on customer types.
-        
-        Returns:
-            Dict with customer type counts
-        """
+        """Get statistics on customer types."""
         stats = {"VIP": 0, "Potential": 0}
         
         for customer in self.customers:
@@ -340,12 +327,7 @@ class CRMService:
         return stats
     
     def get_region_stats(self) -> dict:
-        """
-        Get statistics on customers by region.
-        
-        Returns:
-            Dict with region counts
-        """
+        """Get statistics on customers by region."""
         stats = {}
         
         for customer in self.customers:

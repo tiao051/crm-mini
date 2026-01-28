@@ -4,6 +4,7 @@ Uses the Faker library for realistic names, emails, addresses, etc.
 """
 
 import random
+import logging
 from datetime import datetime, timedelta
 from typing import List
 
@@ -20,6 +21,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.customer import Customer
 from models.interaction import Interaction
 from services.data_service import DataService
+from utils.logger import logger
+
+logger = logging.getLogger(__name__)
 
 
 # Initialize Faker with English locale
@@ -163,17 +167,17 @@ def generate_mock_data(count: int = 25) -> List[Customer]:
         
     Example:
         >>> customers = generate_mock_data(25)
-        >>> print(f"Generated {len(customers)} customers")
+        >>> logger.info(f"Generated {len(customers)} customers")
     """
-    print(f"Generating {count} mock customers...")
+    logger.info(f"Generating {count} mock customers...")
     
     customers = []
     for i in range(1, count + 1):
         customer = generate_customer(i)
         customers.append(customer)
-        print(f"  Generated: {customer.name} ({customer.customer_type})")
+        logger.debug(f"Generated: {customer.name} ({customer.customer_type})")
     
-    print(f"Successfully generated {len(customers)} customers")
+    logger.info(f"Successfully generated {len(customers)} customers")
     return customers
 
 
@@ -213,8 +217,8 @@ def initialize_mock_data(include_birthday_customer: bool = False) -> bool:
     data_service = DataService()
     
     if data_service.data_file_exists():
-        print("Data file already exists. Skipping mock data generation.")
-        print("Delete './data/customers.json' to regenerate mock data.")
+        logger.info("Data file already exists. Skipping mock data generation.")
+        logger.info("Delete './data/customers.json' to regenerate mock data.")
         return False
     
     # Generate 25 customers
@@ -224,29 +228,29 @@ def initialize_mock_data(include_birthday_customer: bool = False) -> bool:
     if include_birthday_customer:
         birthday_customer = generate_birthday_customer()
         customers.append(birthday_customer)
-        print(f"Added birthday test customer: {birthday_customer.name}")
+        logger.info(f"Added birthday test customer: {birthday_customer.name}")
     
     # Save to file
     success = data_service.save_data(customers)
     
     if success:
-        print("\n Mock data initialization complete!")
-        print(f"   Total customers: {len(customers)}")
+        logger.info("Mock data initialization complete!")
+        logger.info(f"Total customers: {len(customers)}")
         
         # Count by type
         vip_count = sum(1 for c in customers if c.customer_type == "VIP")
         potential_count = sum(1 for c in customers if c.customer_type == "Potential")
-        print(f"   VIP customers: {vip_count}")
-        print(f"   Potential customers: {potential_count}")
+        logger.info(f"VIP customers: {vip_count}")
+        logger.info(f"Potential customers: {potential_count}")
         
     return success
 
 
 # Run directly to generate mock data
 if __name__ == "__main__":
-    print("=" * 50)
-    print("Mock Data Generator for Mini CRM")
-    print("=" * 50)
+    logger.info("=" * 50)
+    logger.info("Mock Data Generator for Mini CRM")
+    logger.info("=" * 50)
     
     # Parse command line args
     include_birthday = "--birthday" in sys.argv
@@ -254,6 +258,6 @@ if __name__ == "__main__":
     success = initialize_mock_data(include_birthday_customer=include_birthday)
     
     if success:
-        print("\nMock data saved to './data/customers.json'")
+        logger.info("Mock data saved to './data/customers.json'")
     else:
-        print("\nNo new data generated.")
+        logger.info("No new data generated.")
