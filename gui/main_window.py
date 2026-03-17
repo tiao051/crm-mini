@@ -722,6 +722,7 @@ class MainWindow:
             return
         
         def on_send_callback():
+            messagebox.showinfo("Success", f"Email sent to {customer.name}!")
             # Add interaction to customer record
             self.crm_service.add_interaction(customer.id, datetime.now().strftime("%Y-%m-%d"), 
                                              f"Received email: [automated message]")
